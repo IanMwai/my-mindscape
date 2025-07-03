@@ -54,16 +54,7 @@ const ActivityRecommendationsPage = () => {
   }, [fetchData]); // Dependency on fetchData
 
   // Generate recommendations whenever preferences or static activities change, or after initial load
-  useEffect(() => {
-    if (!loading && allStaticActivities.length > 0) {
-      generateRecommendations();
-    } else if (!loading && allStaticActivities.length === 0) {
-      // If no static activities are found, ensure recommendations are cleared
-      setRecommendedActivities([]);
-    }
-  }, [loading, userPreferences, allStaticActivities]);
-
-  const generateRecommendations = () => {
+  const generateRecommendations = useCallback(() => {
     const numRecommendations = 3; // Number of recommendations to display
     let filteredActivities = [];
 
@@ -139,7 +130,16 @@ const ActivityRecommendationsPage = () => {
     }
 
     setRecommendedActivities(finalRecommendations);
-  };
+  }, [userPreferences, allStaticActivities]);
+
+  useEffect(() => {
+    if (!loading && allStaticActivities.length > 0) {
+      generateRecommendations();
+    } else if (!loading && allStaticActivities.length === 0) {
+      // If no static activities are found, ensure recommendations are cleared
+      setRecommendedActivities([]);
+    }
+  }, [loading, allStaticActivities, generateRecommendations]);
 
   const getCategoryIcon = (category) => {
     switch (category) {

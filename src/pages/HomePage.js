@@ -4,24 +4,24 @@ import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
+const soothingMessages = [
+  "You are doing great, even when it doesn't feel like it.",
+  "Every step forward, no matter how small, is still a step.",
+  "What's one small thing you can do for yourself today?",
+  "Your feelings are valid. Allow yourself to feel them.",
+  "Remember to be kind to yourself, always.",
+  "What if you allowed yourself to be exactly where you are right now?",
+  "You are stronger than you think.",
+  "Take a deep breath. You've got this.",
+  "What brings you a sense of peace today?",
+  "Growth is a process, not a single event."
+];
+
 const HomePage = () => {
   const { currentUser } = useAuth();
   const [userData, setUserData] = useState(null);
   const [timeOfDay, setTimeOfDay] = useState('');
   const [soothingMessage, setSoothingMessage] = useState('');
-
-  const soothingMessages = [
-    "You are doing great, even when it doesn't feel like it.",
-    "Every step forward, no matter how small, is still a step.",
-    "What's one small thing you can do for yourself today?",
-    "Your feelings are valid. Allow yourself to feel them.",
-    "Remember to be kind to yourself, always.",
-    "What if you allowed yourself to be exactly where you are right now?",
-    "You are stronger than you think.",
-    "Take a deep breath. You've got this.",
-    "What brings you a sense of peace today?",
-    "Growth is a process, not a single event."
-  ];
 
   useEffect(() => {
     const fetchUserData = async () => {

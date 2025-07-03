@@ -29,3 +29,5 @@ yarn-error.log*
 
 # OS files
 Thumbs.db
+pglite-debug.log
+node_modules/
