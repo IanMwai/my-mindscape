@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../firebaseConfig';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { Link } from 'react-router-dom';
 
 const ActivityRecommendationsPage = () => {
   const { currentUser } = useAuth();
@@ -51,9 +50,9 @@ const ActivityRecommendationsPage = () => {
     if (!loading && allStaticActivities.length > 0) {
       generateRecommendations();
     }
-  }, [loading, userPreferences, allStaticActivities]);
+  }, [loading, userPreferences, allStaticActivities, generateRecommendations]);
 
-  const generateRecommendations = () => {
+  const generateRecommendations = useCallback(() => {
     const numRecommendations = 3;
     let filteredActivities = [];
   
@@ -135,7 +134,7 @@ const ActivityRecommendationsPage = () => {
     }
   
     setRecommendedActivities(finalRecommendations);
-  };
+  }, [allStaticActivities, userPreferences]);
 
   const getCategoryIcon = (category) => {
     switch (category) {
