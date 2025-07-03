@@ -53,7 +53,7 @@ const ActivityRecommendationsPage = () => {
     }
   }, [loading, userPreferences, allStaticActivities]);
 
-  cconst generateRecommendations = () => {
+  const generateRecommendations = () => {
     const numRecommendations = 3;
     let filteredActivities = [];
   
@@ -134,8 +134,6 @@ const ActivityRecommendationsPage = () => {
       }
     }
   
-    setRecommendedActivities(finalRecommendations);
-  };
     setRecommendedActivities(finalRecommendations);
   };
 
