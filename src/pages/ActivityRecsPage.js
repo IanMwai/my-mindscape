@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebaseConfig';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,134 +12,132 @@ const ActivityRecommendationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Function to fetch data, memoized with useCallback
-  const fetchData = useCallback(async () => {
-    if (!currentUser) {
-      setError('You must be logged in to view activity recommendations.');
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true); // Set loading to true before fetching data
-    setError(''); // Clear any previous errors
-
-    try {
-      // Fetch user preferences
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      if (userDocSnap.exists()) {
-        setUserPreferences(userDocSnap.data().activityPreferences || {});
-      } else {
-        setUserPreferences({}); // Ensure preferences are reset if user doc doesn't exist
-      }
-
-      // Fetch static activities
-      const activitiesCollectionRef = collection(db, 'staticActivities');
-      const activitiesSnapshot = await getDocs(activitiesCollectionRef);
-      const activitiesData = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAllStaticActivities(activitiesData);
-      console.log("Fetched Static Activities:", activitiesData); // Debugging line
-
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to load recommendations. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [currentUser]); // Dependency on currentUser
-
-  // Fetch data on component mount
+  // Fetch user preferences and static activities on component mount
   useEffect(() => {
-    fetchData();
-  }, [fetchData]); // Dependency on fetchData
-
-  // Generate recommendations whenever preferences or static activities change, or after initial load
-  const generateRecommendations = useCallback(() => {
-    const numRecommendations = 3; // Number of recommendations to display
-    let filteredActivities = [];
-
-    // Filtering logic based on user preferences
-    if (userPreferences) {
-      allStaticActivities.forEach(activity => {
-        let isMatch = false;
-
-        // Match by category and genre (music, books, movies)
-        if (userPreferences.musicGenres && activity.category === 'music') {
-          if (activity.genre && userPreferences.musicGenres.includes(activity.genre)) {
-            isMatch = true;
-          } else if (!activity.genre && userPreferences.musicGenres.length > 0) { // If no specific genre, but user has music preferences
-            isMatch = true;
-          }
-        }
-        if (userPreferences.bookGenres && activity.category === 'books') {
-          if (activity.genre && userPreferences.bookGenres.includes(activity.genre)) {
-            isMatch = true;
-          } else if (!activity.genre && userPreferences.bookGenres.length > 0) {
-            isMatch = true;
-          }
-        }
-        if (userPreferences.movieGenres && activity.category === 'movies') {
-          if (activity.genre && userPreferences.movieGenres.includes(activity.genre)) {
-            isMatch = true;
-          } else if (!activity.genre && userPreferences.movieGenres.length > 0) {
-            isMatch = true;
-          }
-        }
-
-        // Match by physical activities (title included in preferences array)
-        if (userPreferences.physicalActivities && activity.category === 'physical') {
-          if (userPreferences.physicalActivities.includes(activity.title)) {
-            isMatch = true;
-          }
-        }
-
-        // Match by other interests (tags overlap)
-        if (userPreferences.otherInterests && activity.tags && activity.tags.length > 0) {
-          const commonTags = activity.tags.filter(tag => userPreferences.otherInterests.includes(tag));
-          if (commonTags.length > 0) {
-            isMatch = true;
-          }
-        }
-
-        if (isMatch) {
-          filteredActivities.push(activity);
-        }
-      });
-    }
-
-    // Fallback recommendations if no specific matches or not enough matches
-    let finalRecommendations = [];
-    if (filteredActivities.length === 0) {
-      // Randomly select from all static activities if no matches
-      const shuffledActivities = [...allStaticActivities].sort(() => 0.5 - Math.random());
-      finalRecommendations = shuffledActivities.slice(0, numRecommendations);
-    } else {
-      // Randomly select from filtered activities
-      const shuffledFiltered = [...filteredActivities].sort(() => 0.5 - Math.random());
-      finalRecommendations = shuffledFiltered.slice(0, numRecommendations);
-
-      // If not enough filtered activities, supplement with random ones
-      if (finalRecommendations.length < numRecommendations) {
-        const remainingNeeded = numRecommendations - finalRecommendations.length;
-        const existingIds = new Set(finalRecommendations.map(rec => rec.id));
-        const supplementalActivities = allStaticActivities.filter(act => !existingIds.has(act.id))
-                                                          .sort(() => 0.5 - Math.random())
-                                                          .slice(0, remainingNeeded);
-        finalRecommendations = [...finalRecommendations, ...supplementalActivities];
+    const fetchData = async () => {
+      if (!currentUser) {
+        setError('You must be logged in to view activity recommendations.');
+        setLoading(false);
+        return;
       }
-    }
 
-    setRecommendedActivities(finalRecommendations);
-  }, [userPreferences, allStaticActivities]);
+      try {
+        // Fetch user preferences
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          setUserPreferences(userDocSnap.data().activityPreferences || {});
+        }
 
+        // Fetch static activities
+        const activitiesCollectionRef = collection(db, 'staticActivities');
+        const activitiesSnapshot = await getDocs(activitiesCollectionRef);
+        const activitiesData = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAllStaticActivities(activitiesData);
+
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load recommendations. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [currentUser]);
+
+  // Generate recommendations whenever preferences or static activities change
   useEffect(() => {
     if (!loading && allStaticActivities.length > 0) {
       generateRecommendations();
-    } else if (!loading && allStaticActivities.length === 0) {
-      // If no static activities are found, ensure recommendations are cleared
-      setRecommendedActivities([]);
     }
-  }, [loading, allStaticActivities, generateRecommendations]);
+  }, [loading, userPreferences, allStaticActivities]);
+
+  cconst generateRecommendations = () => {
+    const numRecommendations = 3;
+    let filteredActivities = [];
+  
+    if (!Array.isArray(allStaticActivities) || allStaticActivities.length === 0) {
+      console.warn("No activities available to recommend from.");
+      return;
+    }
+  
+    allStaticActivities.forEach((activity) => {
+      if (!activity || !activity.category || !activity.title) return;
+  
+      let isMatch = false;
+  
+      // Music
+      if (
+        userPreferences.musicGenres &&
+        activity.category === 'music' &&
+        (userPreferences.musicGenres.includes(activity.genre) || (!activity.genre && userPreferences.musicGenres.length > 0))
+      ) {
+        isMatch = true;
+      }
+  
+      // Books
+      if (
+        userPreferences.bookGenres &&
+        activity.category === 'books' &&
+        (userPreferences.bookGenres.includes(activity.genre) || (!activity.genre && userPreferences.bookGenres.length > 0))
+      ) {
+        isMatch = true;
+      }
+  
+      // Movies
+      if (
+        userPreferences.movieGenres &&
+        activity.category === 'movies' &&
+        (userPreferences.movieGenres.includes(activity.genre) || (!activity.genre && userPreferences.movieGenres.length > 0))
+      ) {
+        isMatch = true;
+      }
+  
+      // Physical
+      if (
+        userPreferences.physicalActivities &&
+        activity.category === 'physical' &&
+        userPreferences.physicalActivities.includes(activity.title)
+      ) {
+        isMatch = true;
+      }
+  
+      // Other interests by tags
+      if (
+        userPreferences.otherInterests &&
+        activity.tags &&
+        activity.tags.some(tag => userPreferences.otherInterests.includes(tag))
+      ) {
+        isMatch = true;
+      }
+  
+      if (isMatch) filteredActivities.push(activity);
+    });
+  
+    let finalRecommendations = [];
+  
+    if (filteredActivities.length === 0) {
+      console.log("Using fallback: random from all activities");
+      const shuffled = [...allStaticActivities].sort(() => 0.5 - Math.random());
+      finalRecommendations = shuffled.slice(0, numRecommendations);
+    } else {
+      console.log("Using filtered preferences");
+      const shuffled = [...filteredActivities].sort(() => 0.5 - Math.random());
+      finalRecommendations = shuffled.slice(0, numRecommendations);
+  
+      if (finalRecommendations.length < numRecommendations) {
+        const needed = numRecommendations - finalRecommendations.length;
+        const ids = new Set(finalRecommendations.map(item => item.id));
+        const extras = allStaticActivities.filter(act => !ids.has(act.id)).sort(() => 0.5 - Math.random()).slice(0, needed);
+        finalRecommendations = [...finalRecommendations, ...extras];
+      }
+    }
+  
+    setRecommendedActivities(finalRecommendations);
+  };
+    setRecommendedActivities(finalRecommendations);
+  };
 
   const getCategoryIcon = (category) => {
     switch (category) {
@@ -201,19 +199,14 @@ const ActivityRecommendationsPage = () => {
           </div>
         )}
 
-        <div className="flex justify-center gap-4 mt-8">
+        <div className="flex justify-center mt-8">
           <button
-            onClick={fetchData}
+            onClick={generateRecommendations}
             className="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors duration-200"
           >
             Refresh Suggestions
           </button>
-          <Link
-            to="/update-preferences"
-            className="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors duration-200"
-          >
-            Update My Preferences
-          </Link>
+          {/* TODO: Add a link to a preferences page once it's created. */}
         </div>
       </div>
     </div>
