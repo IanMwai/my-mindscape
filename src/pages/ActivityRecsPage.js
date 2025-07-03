@@ -11,7 +11,7 @@ const ActivityRecommendationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Fetch user preferences and static activities on component mount
+  // 1) Fetch user prefs + static activities once
   useEffect(() => {
     const fetchData = async () => {
       if (!currentUser) {
@@ -21,18 +21,16 @@ const ActivityRecommendationsPage = () => {
       }
 
       try {
-        // Fetch user preferences
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          setUserPreferences(userDocSnap.data().activityPreferences || {});
+        // user prefs
+        const userSnap = await getDoc(doc(db, 'users', currentUser.uid));
+        if (userSnap.exists()) {
+          setUserPreferences(userSnap.data().activityPreferences || {});
         }
 
-        // Fetch static activities
-        const activitiesCollectionRef = collection(db, 'staticActivities');
-        const activitiesSnapshot = await getDocs(activitiesCollectionRef);
-        const activitiesData = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAllStaticActivities(activitiesData);
+        // static activities
+        const snapshot = await getDocs(collection(db, 'staticActivities'));
+        const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAllStaticActivities(data);
 
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -45,165 +43,118 @@ const ActivityRecommendationsPage = () => {
     fetchData();
   }, [currentUser]);
 
-  // Generate recommendations whenever preferences or static activities change
-  useEffect(() => {
-    if (!loading && allStaticActivities.length > 0) {
-      generateRecommendations();
-    }
-  }, [loading, userPreferences, allStaticActivities, generateRecommendations]);
-
+  // 2) Recommendation engine
   const generateRecommendations = useCallback(() => {
-    const numRecommendations = 3;
-    let filteredActivities = [];
-  
-    if (!Array.isArray(allStaticActivities) || allStaticActivities.length === 0) {
-      console.warn("No activities available to recommend from.");
+    const num = 3;
+    if (allStaticActivities.length === 0) {
+      setRecommendedActivities([]);
       return;
     }
-  
-    allStaticActivities.forEach((activity) => {
-      if (!activity || !activity.category || !activity.title) return;
-  
-      let isMatch = false;
-  
-      // Music
-      if (
-        userPreferences.musicGenres &&
-        activity.category === 'music' &&
-        (userPreferences.musicGenres.includes(activity.genre) || (!activity.genre && userPreferences.musicGenres.length > 0))
-      ) {
-        isMatch = true;
+
+    // filter by prefs
+    const filtered = allStaticActivities.filter(act => {
+      const { category, genre, title, tags = [] } = act;
+      const prefs = userPreferences;
+
+      if (category === 'music' && prefs.musicGenres) {
+        return prefs.musicGenres.includes(genre) || (!genre && prefs.musicGenres.length);
       }
-  
-      // Books
-      if (
-        userPreferences.bookGenres &&
-        activity.category === 'books' &&
-        (userPreferences.bookGenres.includes(activity.genre) || (!activity.genre && userPreferences.bookGenres.length > 0))
-      ) {
-        isMatch = true;
+      if (category === 'books' && prefs.bookGenres) {
+        return prefs.bookGenres.includes(genre) || (!genre && prefs.bookGenres.length);
       }
-  
-      // Movies
-      if (
-        userPreferences.movieGenres &&
-        activity.category === 'movies' &&
-        (userPreferences.movieGenres.includes(activity.genre) || (!activity.genre && userPreferences.movieGenres.length > 0))
-      ) {
-        isMatch = true;
+      if (category === 'movies' && prefs.movieGenres) {
+        return prefs.movieGenres.includes(genre) || (!genre && prefs.movieGenres.length);
       }
-  
-      // Physical
-      if (
-        userPreferences.physicalActivities &&
-        activity.category === 'physical' &&
-        userPreferences.physicalActivities.includes(activity.title)
-      ) {
-        isMatch = true;
+      if (category === 'physical' && prefs.physicalActivities) {
+        return prefs.physicalActivities.includes(title);
       }
-  
-      // Other interests by tags
-      if (
-        userPreferences.otherInterests &&
-        activity.tags &&
-        activity.tags.some(tag => userPreferences.otherInterests.includes(tag))
-      ) {
-        isMatch = true;
+      if (prefs.otherInterests && tags.some(t => prefs.otherInterests.includes(t))) {
+        return true;
       }
-  
-      if (isMatch) filteredActivities.push(activity);
+      return false;
     });
-  
-    let finalRecommendations = [];
-  
-    if (filteredActivities.length === 0) {
-      console.log("Using fallback: random from all activities");
-      const shuffled = [...allStaticActivities].sort(() => 0.5 - Math.random());
-      finalRecommendations = shuffled.slice(0, numRecommendations);
+
+    let picks = [];
+    if (filtered.length === 0) {
+      // fallback: random from all
+      picks = [...allStaticActivities].sort(() => 0.5 - Math.random()).slice(0, num);
     } else {
-      console.log("Using filtered preferences");
-      const shuffled = [...filteredActivities].sort(() => 0.5 - Math.random());
-      finalRecommendations = shuffled.slice(0, numRecommendations);
-  
-      if (finalRecommendations.length < numRecommendations) {
-        const needed = numRecommendations - finalRecommendations.length;
-        const ids = new Set(finalRecommendations.map(item => item.id));
-        const extras = allStaticActivities.filter(act => !ids.has(act.id)).sort(() => 0.5 - Math.random()).slice(0, needed);
-        finalRecommendations = [...finalRecommendations, ...extras];
+      picks = [...filtered].sort(() => 0.5 - Math.random()).slice(0, num);
+      // supplement if too few
+      if (picks.length < num) {
+        const needed = num - picks.length;
+        const ids = new Set(picks.map(a => a.id));
+        const extras = allStaticActivities
+          .filter(a => !ids.has(a.id))
+          .sort(() => 0.5 - Math.random())
+          .slice(0, needed);
+        picks = [...picks, ...extras];
       }
     }
-  
-    setRecommendedActivities(finalRecommendations);
+
+    setRecommendedActivities(picks);
   }, [allStaticActivities, userPreferences]);
 
-  const getCategoryIcon = (category) => {
-    switch (category) {
-      case 'music': return '🎵';
-      case 'books': return '📚';
-      case 'movies': return '🎬';
-      case 'physical': return '💪';
-      default: return '✨';
-    }
-  };
+  // 3) Re-generate when data is ready
+  useEffect(() => {
+    if (!loading) generateRecommendations();
+  }, [loading, generateRecommendations]);
 
-  if (loading) {
-    return <div className="text-center text-text-dark text-lg">Loading recommendations...</div>;
-  }
+  const getCategoryIcon = category =>
+    ({ music: '🎵', books: '📚', movies: '🎬', physical: '💪' }[category] || '✨');
 
-  if (error) {
-    return <div className="text-center text-red-500 text-lg">Error: {error}</div>;
-  }
+  if (loading) return <div className="text-center">Loading recommendations…</div>;
+  if (error)   return <div className="text-center text-red-500">{error}</div>;
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-80px)]">
       <div className="bg-secondary-bg p-6 rounded-lg shadow-lg w-full max-w-4xl">
-        <h2 className="text-3xl font-bold mb-6 text-center text-text-dark">Activities to Brighten Your Day</h2>
+        <h2 className="text-3xl font-bold mb-6 text-center">Activities to Brighten Your Day</h2>
 
-        {recommendedActivities.length > 0 ? (
+        {recommendedActivities.length ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recommendedActivities.map(activity => (
-              <div key={activity.id} className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col">
-                <div className="text-4xl mb-2 text-center">{getCategoryIcon(activity.category)}</div>
-                <h3 className="text-xl font-semibold mb-2 text-text-dark text-center">{activity.title}</h3>
-                <p className="text-gray-700 text-sm mb-4 flex-grow">{activity.description}</p>
+            {recommendedActivities.map(act => (
+              <div key={act.id} className="bg-white p-6 rounded-lg shadow-md flex flex-col">
+                <div className="text-4xl mb-2 text-center">{getCategoryIcon(act.category)}</div>
+                <h3 className="text-xl font-semibold mb-2 text-center">{act.title}</h3>
+                <p className="flex-grow text-gray-700 text-sm mb-4">{act.description}</p>
                 <div className="flex flex-wrap gap-2 mb-4 justify-center">
-                  {activity.tags && activity.tags.map((tag, index) => (
-                    <span key={index} className="bg-highlight text-white text-xs px-2 py-1 rounded-full">
-                      {tag}
+                  {act.tags?.map((t,i) => (
+                    <span key={i} className="bg-highlight text-white text-xs px-2 py-1 rounded-full">
+                      {t}
                     </span>
                   ))}
                 </div>
-                {activity.link && (
+                {act.link && (
                   <a
-                    href={activity.link}
+                    href={act.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-auto bg-highlight text-white py-2 px-4 rounded-md hover:bg-opacity-90 transition-colors duration-200 text-center"
+                    className="mt-auto bg-highlight text-white py-2 px-4 rounded-md text-center hover:bg-opacity-90"
                   >
-                    {activity.category === 'music' ? 'Listen Now' :
-                     activity.category === 'books' ? 'Read More' :
-                     activity.category === 'movies' ? 'Watch Now' :
-                     'Start Activity'}
+                    {act.category === 'music' ? 'Listen Now'
+                      : act.category === 'books' ? 'Read More'
+                      : act.category === 'movies' ? 'Watch Now'
+                      : 'Start Activity'}
                   </a>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center text-gray-700 text-lg">
-            <p className="mb-4">No specific recommendations found based on your preferences.</p>
-            <p>Try updating your preferences or refreshing for generic suggestions.</p>
+          <div className="text-center text-gray-700">
+            <p className="mb-4">No recommendations found.</p>
+            <p>Try updating your preferences or refresh below.</p>
           </div>
         )}
 
         <div className="flex justify-center mt-8">
           <button
             onClick={generateRecommendations}
-            className="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors duration-200"
+            className="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600"
           >
             Refresh Suggestions
           </button>
-          {/* TODO: Add a link to a preferences page once it's created. */}
         </div>
       </div>
     </div>
