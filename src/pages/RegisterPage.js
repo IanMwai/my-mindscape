@@ -32,7 +32,11 @@ const RegisterPage = () => {
       await register(email, password, firstName, lastName);
       navigate('/');
     } catch (err) {
-      setError('Failed to create an account. ' + err.message);
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Failed to create an account. This email address is already in use.');
+      } else {
+        setError('Failed to create an account. Please try again.');
+      }
     }
     setLoading(false);
   };

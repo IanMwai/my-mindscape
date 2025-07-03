@@ -42,8 +42,10 @@ const AccountPage = () => {
       )}
       <div className="mt-8 flex flex-col space-y-4">
         <button onClick={logout} className="w-full bg-highlight text-white py-2 px-4 rounded hover:bg-opacity-90">Logout</button>
-        <button className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-opacity-90">Delete Account</button>
-        <button className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-opacity-90">Refer a Friend</button>
+        {/* TODO: Implement account deletion functionality */}
+        <button className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-opacity-90 disabled:bg-red-300 disabled:cursor-not-allowed" disabled>Delete Account</button>
+        {/* TODO: Implement refer a friend functionality */}
+        <button className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-opacity-90 disabled:bg-blue-300 disabled:cursor-not-allowed" disabled>Refer a Friend</button>
       </div>
     </div>
   );
